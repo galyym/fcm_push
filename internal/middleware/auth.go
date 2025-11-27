@@ -8,12 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AuthMiddleware middleware для проверки API ключа
 func AuthMiddleware() gin.HandlerFunc {
 	apiKey := os.Getenv("API_KEY")
 
 	return func(c *gin.Context) {
-		// Если API_KEY не установлен, пропускаем проверку (для разработки)
 		if apiKey == "" {
 			c.Next()
 			return
@@ -28,7 +26,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Ожидаем формат: "Bearer <api_key>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -50,7 +47,6 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// CORSMiddleware middleware для CORS
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")

@@ -16,7 +16,6 @@ services:
       - FCM_PROJECT_ID=${FCM_PROJECT_ID}
       - API_KEY=${API_KEY}
     volumes:
-      # Монтируем Firebase credentials файл
       - ${FIREBASE_CREDENTIALS_PATH}:/app/credentials/firebase-credentials.json:ro
     restart: unless-stopped
     healthcheck:

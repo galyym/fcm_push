@@ -24,30 +24,23 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Инициализация FCM клиента
 	ctx := context.Background()
 	fcmClient, err := fcm.NewClient(ctx, cfg.FCM.CredentialsPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize FCM client: %v", err)
 	}
 
-	// Инициализация сервисов
 	pushService := service.NewPushService(fcmClient)
 
-	// Инициализация handlers
 	pushHandler := handler.NewPushHandler(pushService)
-
-	// Настройка Gin
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(middleware.CORSMiddleware())
 
-	// Health check endpoint (без аутентификации)
-	router.GET("/health", pushHandler.HealthCheck)
+	router.GET("/s", pushHandler.HealthCheck)
 
-	// API routes с аутентификацией
 	api := router.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware())
 	{
@@ -58,7 +51,6 @@ func main() {
 		}
 	}
 
-	// Создание HTTP сервера
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
 		Handler:      router,
@@ -66,7 +58,6 @@ func main() {
 		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
 	}
 
-	// Запуск сервера в горутине
 	go func() {
 		log.Printf("Starting FCM Push Service on port %s", cfg.Server.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -74,7 +65,6 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

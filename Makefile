@@ -1,6 +1,5 @@
 .PHONY: help build run test clean docker-build docker-run docker-stop dev
 
-# Переменные
 APP_NAME=fcm-push-service
 DOCKER_IMAGE=$(APP_NAME):latest
 MAIN_PATH=./cmd/server/main.go
@@ -73,10 +72,6 @@ install-tools: ## Установить необходимые инструмен
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@go install golang.org/x/tools/cmd/goimports@latest
 	@echo "Tools installed"
-
-# Для CI/CD
-ci-test: ## Запустить тесты для CI
-	@go test -v -race -coverprofile=coverage.out ./...
 
 ci-build: ## Собрать для CI
 	@CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/$(APP_NAME) $(MAIN_PATH)
