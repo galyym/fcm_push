@@ -12,17 +12,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// QueueRepository handles database operations for push queue
 type QueueRepository struct {
 	db *database.DB
 }
 
-// NewQueueRepository creates a new queue repository
 func NewQueueRepository(db *database.DB) *QueueRepository {
 	return &QueueRepository{db: db}
 }
 
-// CreateTask creates a new push notification task in the queue
 func (r *QueueRepository) CreateTask(ctx context.Context, req *model.CreateQueueTaskRequest) (*model.PushQueueTask, error) {
 	task := &model.PushQueueTask{
 		ID:          uuid.New(),
@@ -70,7 +67,6 @@ func (r *QueueRepository) CreateTask(ctx context.Context, req *model.CreateQueue
 	return task, nil
 }
 
-// GetTaskByID retrieves a task by its ID
 func (r *QueueRepository) GetTaskByID(ctx context.Context, id uuid.UUID) (*model.PushQueueTask, error) {
 	query := `
 		SELECT id, token, title, body, data, priority, client_id,
@@ -97,7 +93,6 @@ func (r *QueueRepository) GetTaskByID(ctx context.Context, id uuid.UUID) (*model
 	return task, nil
 }
 
-// GetPendingTasks retrieves tasks that are ready to be processed
 func (r *QueueRepository) GetPendingTasks(ctx context.Context, limit int) ([]*model.PushQueueTask, error) {
 	query := `
 		UPDATE push_queue
@@ -139,7 +134,6 @@ func (r *QueueRepository) GetPendingTasks(ctx context.Context, limit int) ([]*mo
 	return tasks, nil
 }
 
-// UpdateTaskSuccess updates a task as successfully completed
 func (r *QueueRepository) UpdateTaskSuccess(ctx context.Context, id uuid.UUID, messageID string) error {
 	query := `
 		UPDATE push_queue
@@ -155,13 +149,11 @@ func (r *QueueRepository) UpdateTaskSuccess(ctx context.Context, id uuid.UUID, m
 	return nil
 }
 
-// UpdateTaskFailure updates a task as failed and schedules retry if attempts remain
 func (r *QueueRepository) UpdateTaskFailure(ctx context.Context, id uuid.UUID, errorMsg string, nextRetry *time.Time) error {
 	var query string
 	var args []interface{}
 
 	if nextRetry != nil {
-		// Schedule retry
 		query = `
 			UPDATE push_queue
 			SET attempts = attempts + 1,
@@ -173,7 +165,6 @@ func (r *QueueRepository) UpdateTaskFailure(ctx context.Context, id uuid.UUID, e
 		`
 		args = []interface{}{errorMsg, *nextRetry, model.StatusPending, id}
 	} else {
-		// Mark as permanently failed
 		query = `
 			UPDATE push_queue
 			SET attempts = attempts + 1,
@@ -193,9 +184,7 @@ func (r *QueueRepository) UpdateTaskFailure(ctx context.Context, id uuid.UUID, e
 	return nil
 }
 
-// GetHistory retrieves task history with filtering and pagination
 func (r *QueueRepository) GetHistory(ctx context.Context, req *model.QueueHistoryRequest) (*model.QueueHistoryResponse, error) {
-	// Build WHERE clause
 	var conditions []string
 	var args []interface{}
 	argPos := 1
@@ -229,7 +218,6 @@ func (r *QueueRepository) GetHistory(ctx context.Context, req *model.QueueHistor
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// Get total count
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM push_queue %s", whereClause)
 	var total int
 	err := r.db.Pool.QueryRow(ctx, countQuery, args...).Scan(&total)
@@ -237,7 +225,6 @@ func (r *QueueRepository) GetHistory(ctx context.Context, req *model.QueueHistor
 		return nil, fmt.Errorf("failed to get total count: %w", err)
 	}
 
-	// Set defaults for pagination
 	if req.Limit <= 0 {
 		req.Limit = 50
 	}
@@ -245,7 +232,6 @@ func (r *QueueRepository) GetHistory(ctx context.Context, req *model.QueueHistor
 		req.Offset = 0
 	}
 
-	// Get tasks
 	query := fmt.Sprintf(`
 		SELECT id, token, title, body, client_id, status, attempts, max_attempts,
 		       error_message, fcm_message_id, created_at, updated_at
@@ -285,7 +271,6 @@ func (r *QueueRepository) GetHistory(ctx context.Context, req *model.QueueHistor
 	}, nil
 }
 
-// GetStats retrieves queue statistics
 func (r *QueueRepository) GetStats(ctx context.Context) (*model.QueueStatsResponse, error) {
 	query := `
 		SELECT 
@@ -313,7 +298,6 @@ func (r *QueueRepository) GetStats(ctx context.Context) (*model.QueueStatsRespon
 	return stats, nil
 }
 
-// CleanupOldTasks deletes tasks older than the specified duration
 func (r *QueueRepository) CleanupOldTasks(ctx context.Context, olderThan time.Duration) (int64, error) {
 	query := `
 		DELETE FROM push_queue

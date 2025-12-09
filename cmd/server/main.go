@@ -26,13 +26,11 @@ import (
 )
 
 func main() {
-	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Initialize database
 	db, err := database.NewDB(database.Config{
 		Host:     cfg.Database.Host,
 		Port:     cfg.Database.Port,
@@ -46,26 +44,21 @@ func main() {
 	}
 	defer db.Close()
 
-	// Run migrations
 	if err := runMigrations(cfg); err != nil {
 		log.Printf("Warning: Migration failed: %v", err)
 	}
 
-	// Initialize FCM client
 	ctx := context.Background()
 	fcmClient, err := fcm.NewClient(ctx, cfg.FCM.CredentialsPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize FCM client: %v", err)
 	}
 
-	// Initialize repositories
 	queueRepo := repository.NewQueueRepository(db)
 
-	// Initialize services
 	pushService := service.NewPushService(fcmClient)
 	queueService := service.NewQueueService(queueRepo)
 
-	// Parse worker configuration
 	pollInterval, err := time.ParseDuration(cfg.Worker.PollInterval)
 	if err != nil {
 		log.Fatalf("Invalid poll interval: %v", err)
@@ -76,7 +69,6 @@ func main() {
 		log.Fatalf("Invalid retry intervals: %v", err)
 	}
 
-	// Initialize and start queue worker
 	queueWorker := worker.NewQueueWorker(queueRepo, fcmClient, worker.Config{
 		WorkerCount:    cfg.Worker.WorkerCount,
 		PollInterval:   pollInterval,
@@ -86,32 +78,26 @@ func main() {
 	queueWorker.Start()
 	defer queueWorker.Stop()
 
-	// Initialize handlers
 	pushHandler := handler.NewPushHandler(pushService, queueService)
 	queueHandler := handler.NewQueueHandler(queueService)
 
-	// Setup router
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(middleware.CORSMiddleware())
 
-	// Health check endpoint
 	router.GET("/health", pushHandler.HealthCheck)
 
-	// API routes
 	api := router.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware())
 	{
-		// Push endpoints
 		push := api.Group("/push")
 		{
 			push.POST("/send", pushHandler.SendPush)
 			push.POST("/send-batch", pushHandler.SendBatchPush)
 		}
 
-		// Queue management endpoints
 		queue := api.Group("/queue")
 		{
 			queue.GET("/status/:id", queueHandler.GetTaskStatus)
@@ -120,7 +106,6 @@ func main() {
 		}
 	}
 
-	// Start HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
 		Handler:      router,
@@ -135,14 +120,12 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down server...")
 
-	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -153,7 +136,6 @@ func main() {
 	log.Println("Server exited")
 }
 
-// runMigrations runs database migrations
 func runMigrations(cfg *config.Config) error {
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
@@ -182,7 +164,6 @@ func runMigrations(cfg *config.Config) error {
 	return nil
 }
 
-// parseRetryIntervals parses retry intervals from comma-separated string
 func parseRetryIntervals(intervalsStr string) ([]time.Duration, error) {
 	parts := strings.Split(intervalsStr, ",")
 	intervals := make([]time.Duration, 0, len(parts))
