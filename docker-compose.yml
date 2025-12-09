@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fcm-push-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=fcm_push_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taxi-network
+    restart: unless-stopped
+
   fcm-push-service:
     build:
       context: .
@@ -12,11 +32,27 @@ services:
       - SERVER_PORT=8080
       - SERVER_READ_TIMEOUT=10
       - SERVER_WRITE_TIMEOUT=10
-      - FCM_CREDENTIALS_PATH=/app/credentials/firebase-credentials.json
+      - FCM_CREDENTIALS_PATH=/storage/global-go-9da55-firebase-adminsdk-t20wz-9b72a1affd.json
       - FCM_PROJECT_ID=${FCM_PROJECT_ID}
       - API_KEY=${API_KEY}
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=fcm_push_db
+      - DB_SSL_MODE=disable
+      # Worker
+      - WORKER_COUNT=5
+      - WORKER_POLL_INTERVAL=5s
+      - MAX_RETRY_ATTEMPTS=3
+      - RETRY_INTERVALS=1m,5m,15m
+      - CLEANUP_AFTER_DAYS=30
     volumes:
-      - ${FIREBASE_CREDENTIALS_PATH}:/app/credentials/firebase-credentials.json:ro
+      - ${FIREBASE_CREDENTIALS_PATH}:/storage/global-go-9da55-firebase-adminsdk-t20wz-9b72a1affd.json
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health" ]
@@ -26,6 +62,10 @@ services:
       start_period: 40s
     networks:
       - taxi-network
+
+volumes:
+  postgres_data:
+
 
 networks:
   taxi-network:

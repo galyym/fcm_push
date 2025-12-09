@@ -9,12 +9,14 @@ import (
 )
 
 type PushHandler struct {
-	pushService *service.PushService
+	pushService  *service.PushService
+	queueService *service.QueueService
 }
 
-func NewPushHandler(pushService *service.PushService) *PushHandler {
+func NewPushHandler(pushService *service.PushService, queueService *service.QueueService) *PushHandler {
 	return &PushHandler{
-		pushService: pushService,
+		pushService:  pushService,
+		queueService: queueService,
 	}
 }
 
@@ -44,16 +46,30 @@ func (h *PushHandler) SendPush(c *gin.Context) {
 		req.Priority = "normal"
 	}
 
-	response, err := h.pushService.SendPush(c.Request.Context(), &req)
+	// Enqueue push notification instead of sending directly
+	queueReq := &model.CreateQueueTaskRequest{
+		Token:    req.Token,
+		Title:    req.Title,
+		Body:     req.Body,
+		Data:     req.Data,
+		Priority: req.Priority,
+		ClientID: req.ClientID,
+	}
+
+	task, err := h.queueService.EnqueuePush(c.Request.Context(), queueReq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "Failed to send push",
+			Error:   "Failed to enqueue push",
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusAccepted, gin.H{
+		"queue_task_id": task.ID,
+		"status":        task.Status,
+		"message":       "Push notification queued successfully",
+	})
 }
 
 // SendBatchPush обрабатывает запрос на отправку нескольких push-уведомлений
@@ -78,16 +94,32 @@ func (h *PushHandler) SendBatchPush(c *gin.Context) {
 		return
 	}
 
-	response, err := h.pushService.SendBatchPush(c.Request.Context(), &req)
+	queueTasks := make([]model.CreateQueueTaskRequest, len(req.Notifications))
+	for i, notification := range req.Notifications {
+		queueTasks[i] = model.CreateQueueTaskRequest{
+			Token:    notification.Token,
+			Title:    notification.Title,
+			Body:     notification.Body,
+			Data:     notification.Data,
+			Priority: notification.Priority,
+			ClientID: notification.ClientID,
+		}
+	}
+
+	tasks, err := h.queueService.EnqueueBatchPush(c.Request.Context(), queueTasks)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "Failed to send batch push",
+			Error:   "Failed to enqueue batch push",
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusAccepted, gin.H{
+		"queued_count": len(tasks),
+		"tasks":        tasks,
+		"message":      "Batch push notifications queued successfully",
+	})
 }
 
 // HealthCheck проверка здоровья сервиса
