@@ -313,3 +313,23 @@ func (r *QueueRepository) CleanupOldTasks(ctx context.Context, olderThan time.Du
 
 	return result.RowsAffected(), nil
 }
+func (r *QueueRepository) IsDuplicateTask(ctx context.Context, token, title, body string, interval time.Duration) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM push_queue
+			WHERE token = $1 
+			  AND title = $2 
+			  AND body = $3 
+			  AND created_at > $4
+		)
+	`
+
+	cutoffTime := time.Now().Add(-interval)
+	var exists bool
+	err := r.db.Pool.QueryRow(ctx, query, token, title, body, cutoffTime).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check for duplicates: %w", err)
+	}
+
+	return exists, nil
+}

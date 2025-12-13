@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/galyym/fcm_push/internal/model"
 	"github.com/galyym/fcm_push/internal/repository"
@@ -22,6 +23,21 @@ func NewQueueService(repo *repository.QueueRepository) *QueueService {
 
 func (s *QueueService) EnqueuePush(ctx context.Context, req *model.CreateQueueTaskRequest) (*model.QueueTaskResponse, error) {
 	log.Printf("Enqueueing push notification for client: %s", req.ClientID)
+
+	isDup, err := s.repo.IsDuplicateTask(ctx, req.Token, req.Title, req.Body, 10*time.Second)
+	if err != nil {
+		log.Printf("Failed to check for duplicates: %v", err)
+	}
+	if isDup {
+		log.Printf("Duplicate push task suppressed for client: %s", req.ClientID)
+		return &model.QueueTaskResponse{
+			ID:        uuid.New(),
+			Status:    "duplicate_suppressed",
+			ClientID:  req.ClientID,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	}
 
 	task, err := s.repo.CreateTask(ctx, req)
 	if err != nil {
